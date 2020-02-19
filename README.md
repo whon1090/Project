@@ -1,3 +1,3 @@
 # Project
 
-# R and Python project and code upload
+# 프로젝트 관련 코드 업로드
