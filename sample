@@ -1,0 +1,200 @@
+#import module
+
+
+import pandas as pd
+import numpy as np
+import time
+import re
+import os
+import datetime as dt
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+
+import urllib3
+from bs4 import BeautifulSoup
+import requests
+
+# import nlp
+from konlpy.tag import Twitter
+# import nltk
+
+# import selenium
+
+# from selenium import webdriver
+# from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.support.ui import Select
+
+# path = "C:/driver/chromedriver.exe"    #ex. C:/downloads/chromedriver.exe
+
+import warnings
+warnings.filterwarnings(action='ignore')
+%matplotlib inline
+
+font_name = mpl.font_manager.FontProperties(fname='C:/Windows/Fonts/malgunbd.ttf').get_name()
+mpl.rc('font', family=font_name)
+mpl.rcParams['axes.unicode_minus'] = False
+
+
+
+title_list =[]
+url_list = []
+tag_list = []
+
+# naver newsstand crawling 
+news_url = ["https://news.naver.com/main/list.nhn?mode=LS2D&mid=shm&sid1=105&sid2=227",
+            'https://news.naver.com/main/list.nhn?mode=LS2D&mid=shm&sid1=105&sid2=230',
+           'https://news.naver.com/main/list.nhn?mode=LS2D&mid=shm&sid1=105&sid2=283'] # 뉴스 주소 입력
+
+
+for news_list in news_url:
+    
+    res = requests.get(news_list, headers={'User-Agent':'Chrome/85.0.4183.121'},verify = False) 
+    # requests이용하여 뉴스 주소 Load, 네이버 크롬 차단 방지 위해 chrome version을 입력하고 뉴스 주소를 설정
+    # SSL ERROR 방지를 위해 Verify False 설정
+    soup = BeautifulSoup(res.text, "html.parser") # html기준으로 parsing
+
+
+    results = soup.select("#main_content a")  # 
+
+
+    tag = soup.select('h3')[1] #IT/과학 탭을 기록하기 위한 tag 추출
+    IT_tag = tag.string
+
+
+    # 제목, 링크 출력 ---------------------------(2)
+    for result in results:
+        if result.string == None:
+            continue
+        if result.attrs['href'].startswith('http') == False :
+            continue
+        title_list.append(str.strip(result.string))
+        url_list.append(result.attrs['href'])
+        tag_list.append(IT_tag)
+
+
+
+df = pd.DataFrame({'tag':tag_list,'title': title_list,'url':url_list})
+df['title'] = df.title.str.replace('&apos;',"\'") # 쉼표가  &apos 형태로 기록되어 해당 단어 쉼표로 대체
+df.head(10)
+
+df_sample  = df.copy() # 특수문자 제거하여 단어 추출을 위한 copy DataFrame 생성
+df_sample['title'] =  df_sample['title'].str.replace("[^ㄱ-ㅎ ㅏ-ㅣ 가-힣| a-zA-Z0-9]", " ")
+# 기사 제목의 영어, 숫자, 한글 제외한 특수문자 제거
+df_sample.head()
+
+count = 0
+data_list =[] # 중복되는 기사 제목의 index 저장 list
+duplicate_list = [] #중복 기사 제목의 저장 list
+before_list = [] #이전 기사 제목 저장 list
+for row, compare in enumerate(df_sample['title']): 
+    title_split = re.split(' ', df_sample.title[row]) # 기사 제목을 띄어쓰기 단위로 구분
+    title_split = [ string for string in title_split if string != ''] #  리스트에 빈공간인 ''로 저장되는 list 삭제
+    if row==0:
+        before_list.append(title_split) # 첫 index의 기사제목을 단어 단위로 저장
+        continue
+    
+    
+    
+    for i in before_list:
+        for k in i :
+            if row in data_list : # Data_list의 동일한 index가 저장되어 있으면 skip
+                break
+            if title_split.count(k) >=1 : # 저장한 기사 제목의 단어가 이전의 기사 제목의 단어에 1개 이상 있으면 count하고
+                # 3개 이상의 단어가 count시 중복되는 기사로 파악하여 해당 index생성
+
+                count +=1
+                if count>=3 :
+                    count=0
+                    data_list.append(row) # 3개 단어 이상 중복시 해당 기사의 index 추가 
+                    duplicate_list.append(compare) # 3개 단어 이상 중복시 해당 기사의 제목 추가 
+                    break
+        count=0 # 중복 되는 단어 count reset
+        
+    before_list.append(title_split) # 현재 기사를 이전 기사 리스트에 편입
+    
+    
+    
+preview_res = requests.get("https://news.naver.com/main/list.nhn?mode=LS2D&mid=shm&sid1=105&sid2=227", headers={'User-Agent':'Chrome/85.0.4183.121'},verify = False) 
+# requests이용하여 뉴스 주소 Load, 네이버 크롬 차단 방지 위해 chrome version 입력하여 주소로 Load , SSL ERROR 방지 위해 Verify False 설정
+soup = BeautifulSoup(res.text, "html.parser") # html기준으로 parsing
+    
+results = soup.select(".lede")  # 
+
+preview_list = []
+
+regex = re.compile('\(.+?\)')
+regex2 = re.compile('\[.+?\]')
+
+reg_list = [regex,regex2]
+
+for result in results:
+    if result.string == None:
+        continue
+    preview = str.strip(result.string)
+    for k in reg_list :
+        
+        preview = k.sub('',preview)
+    
+    preview = preview.strip()
+    preview_list.append(preview)
+    
+    
+news = 'https://news.naver.com/main/main.nhn?mode=LSD&mid=shm&sid1=105'
+
+res = requests.get(news, headers={'User-Agent':'Chrome/85.0.4183.121'},verify = False) 
+# requests이용하여 뉴스 주소 Load, 네이버 크롬 차단 방지 위해 chrome version을 입력하고 뉴스 주소를 설정
+# SSL ERROR 방지를 위해 Verify False 설정
+soup = BeautifulSoup(res.text, "html.parser") # html기준으로 parsing
+
+title_list =[]
+url_list = []
+
+results = soup.select("#main_content a")  #  
+
+# tag = soup.select('h3')[1] #IT/과학 탭을 기록하기 위한 tag 추출
+# IT_tag = tag.string
+
+
+# 제목, 링크 출력 ---------------------------(2)
+for result in results:
+    if result.string == None:
+        continue
+    
+    if result.attrs['href'] in ['#'] :
+        break
+    
+    if result.attrs['href'].startswith('http') == False :
+        continue
+    
+
+    title_list.append(str.strip(result.string))
+    url_list.append(result.attrs['href'])
+
+
+df = pd.DataFrame({'title': title_list,'url':url_list})
+df['title'] = df.title.str.replace('\\',"") # 쉼표가  &apos 형태로 기록되어 해당 단어 쉼표로 대체
+df.head(10)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
