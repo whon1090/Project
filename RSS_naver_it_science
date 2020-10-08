@@ -1,0 +1,140 @@
+# Documentation  
+
+Anaconda 2019.07 버전의 python 3.7.4 defalut 값으로 진행  
+  
+Python = 3.7.4  
+Pandas = 0.25.1   
+Numpy = 1.16.5  
+urllib3 = 1.24.2  
+BeautifulSoup = 4.8.0  
+requests = 2.22.0   
+
+#import module
+
+import pandas as pd
+import numpy as np
+import time
+import re
+import os
+import datetime as dt
+
+
+import urllib3
+from bs4 import BeautifulSoup
+import requests
+
+# import selenium
+
+# from selenium import webdriver
+# from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.support.ui import Select
+
+# path = "C:/driver/chromedriver.exe"    #ex. C:/downloads/chromedriver.exe
+
+import warnings
+warnings.filterwarnings(action='ignore')
+
+
+
+### 다른 사이트의 경우 IT이외의 다른 분야의 기사가 많이 혼재하여 선제적으로  
+### 네이버 뉴스 IT/과학의 헤드라인, ITWorld korea의 머신러닝, 클라우드, 빅데이터 파트,  ZDnet의 인공지능 파트에서
+### 데이터 추출 예정
+
+IT/과학 헤드라인의 헤드라인 더보기 전까지 기사의 제목과 URL을 추출후 DataFrame안에 저장하여 기록  
+이후 저장한 URL에 개별 접속하여 기사의 본문을 가져와서 저장하는 형식으로 진행
+
+
+news = 'https://news.naver.com/main/main.nhn?mode=LSD&mid=shm&sid1=105' ## IT/과학 헤드라인 뉴스  url
+
+res = requests.get(news, headers={'User-Agent':'Chrome/85.0.4183.121'},verify = False) 
+# requests이용하여 뉴스 주소 Load, 네이버 크롬 차단 방지 위해 chrome version을 입력하고 뉴스 주소를 설정
+# SSL ERROR 방지를 위해 Verify False 설정
+soup = BeautifulSoup(res.text, "html.parser") # html기준으로 parsing
+
+title_list =[] # 제목을 저장하기 위한 list 생성
+url_list = [] #URL을 저장하기 위한 list 생성
+
+results = soup.select("#main_content a")  # 기사 제목과 URL이 모두 html main_content a에 저장되어 있어서 해당 부분을 select하여 추출
+
+
+# 제목, 링크 출력 ---------------------------(2)
+for result in results:
+    if result.string == None: # 값이 존재하지 않을 경우 해당 루프 건너 뜀
+        continue
+    
+    if result.attrs['href'] in ['#'] : # 헤드라인 더보기의 end code가 #이므로 #일 경우 loop문을 Break하여 종료함
+        break
+    
+    if result.attrs['href'].startswith('http') == False : 
+        # 해당 href에서 url 코드가 http로 시작하지 않을경우 url이 아니라고 판단하여 해당 부분 skip
+        continue
+    
+
+    title_list.append(str.strip(result.string)) #기록된 기사 제목을 리스트에 추가
+    url_list.append(result.attrs['href']) #기록된 기사 URL을 리스트에 추가
+
+
+df = pd.DataFrame({'title': title_list,'url':url_list}) # 기사제목과, URL을 dataframe에 임시 저장
+df['title'] = df.title.str.replace('\\',"") # 따옴표가  &apos 형태로 기록되어 해당 문자를 따옴표로 대체
+df.head(10)
+
+
+### 네이버 뉴스는 IT/과학이기 때문에 과학과 관련된 단어 리스트 추가를 통해
+### 과학과 관련된 뉴스를 최대한 제거하는 작업이 필요하다고 판단된다
+
+이를 위해 과학에 국한된 단어 리스트를 추가하여 기사 제목이나 본문에 해당 단어 빈도수가 높을 경우 제거
+
+science_list = ['노벨','노벨화학상','화학','과학자'] # 10.08일자 과학 단어 list
+
+샘플 코드로서 저장된 URL중 하나에 접속하여 해당 기사의 제목과 본문 추출
+
+
+url =' https://news.naver.com/main/read.nhn?mode=LSD&mid=shm&sid1=105&oid=629&aid=0000045669'
+title_list2 =[]
+news_list2 = []
+
+
+responce = requests.get(url, headers={'User-Agent':'Chrome/85.0.4183.121'},verify = False) 
+news = BeautifulSoup(responce.text,'html.parser')
+content = news.select("#articleBodyContents")
+
+
+news_content = content[0]
+
+for target in news_content.find_all('script'):
+    target.extract()
+
+for target in news_content.find_all('a'):
+    target.extract()
+
+for target in news_content.find_all('span'):
+    target.extract()
+
+for target in news_content.find_all('div'):
+    target.extract()
+    
+for target in news_content.find_all('iframe'):
+    target.extract()
+
+    
+for target in news_content.find_all('br'):
+    target.replace_with("\n")    
+
+    
+news_content
+
+해당 내용을 Text로 전환, 기사와 유사하게 하기 위해 Selenium 사용시 '\n'일 경우 enter를 입력하게 하여 기사 붙여넣기 할 예정
+
+news_text = news_content.get_text()
+news_text = news_text.replace("\t", "").replace('\'','')
+news_text
+
+
+
+
+
+
+
+
+
+
